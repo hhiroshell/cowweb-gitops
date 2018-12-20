@@ -1,0 +1,84 @@
+box:
+  id: openjdk:8-jdk
+  ports:
+    - 8080
+
+build:
+  steps:
+    - script:
+        name: prepare gradlew
+        code: |
+          chmod +x ./gradlew
+    - script:
+        name: gradle build
+        code: |
+          ./gradlew --full-stacktrace -q --project-cache-dir=$WERCKER_CACHE_DIR build
+
+integration-test:
+  steps:
+    - script:
+        name: Run and IT
+        code: |
+          java -jar $WERCKER_ROOT/build/libs/cowweb-1.0.jar &
+          sleep 5
+          ./gradlew --full-stacktrace -q --project-cache-dir=$WERCKER_CACHE_DIR integrationTest
+
+docker-push:
+  steps:
+    - internal/docker-push:
+        name: docker push
+        username: $REGISTRY_USERNAME
+        password: $REGISTRY_PASSWORD
+        repository: hhayakaw/cowweb
+        tag: v1.0-$WERCKER_GIT_BRANCH-$WERCKER_GIT_COMMIT
+        ports: 8080
+        cmd: java -jar /pipeline/source/build/libs/cowweb-1.0.jar
+
+update-sst:
+  box: hhayakaw/gitops-runner:v0.1
+  steps:
+    - hhiroshell/github@1.0.6:
+        name: hub clone manifest template
+        user: $GITHUB_USER
+        token: $GITHUB_TOKEN
+        cmd: clone https://github.com/hhiroshell/cowweb-gitops-manifest-template.git
+    - hhiroshell/github@1.0.6:
+        name: hub clone manifest $WERCKER_GIT_BRANCH
+        user: $GITHUB_USER
+        token: $GITHUB_TOKEN
+        cmd: clone https://github.com/hhiroshell/cowweb-gitops-manifest-$WERCKER_GIT_BRANCH.git
+    - hhiroshell/helm-template@0.0.1:
+        name: helm template
+        chart: cowweb-gitops-manifest-template/cowweb-helm
+        flags: -f cowweb-gitops-manifest-template/values-$WERCKER_GIT_BRANCH.yaml --set image=hhayakaw/cowweb:v1.0-$WERCKER_GIT_BRANCH-$WERCKER_GIT_COMMIT
+        output-file: cowweb-gitops-manifest-$WERCKER_GIT_BRANCH/cowweb.yaml
+    - hhiroshell/github@1.0.6:
+        name: hub checkout
+        cwd: cowweb-gitops-manifest-$WERCKER_GIT_BRANCH/
+        user: $GITHUB_USER
+        token: $GITHUB_TOKEN
+        cmd: checkout -b Wercker/$WERCKER_GIT_COMMIT
+    - hhiroshell/github@1.0.6:
+        name: hub add
+        cwd: cowweb-gitops-manifest-$WERCKER_GIT_BRANCH/
+        user: $GITHUB_USER
+        token: $GITHUB_TOKEN
+        cmd: add .
+    - hhiroshell/github@1.0.6:
+        name: hub commit
+        cwd: cowweb-gitops-manifest-$WERCKER_GIT_BRANCH/
+        user: $GITHUB_USER
+        token: $GITHUB_TOKEN
+        cmd: commit -m "CI_Update-the-raw-manifest(s)_image=v1.0-$WERCKER_GIT_BRANCH-$WERCKER_GIT_COMMIT"
+    - hhiroshell/github@1.0.6:
+        name: hub push
+        cwd: cowweb-gitops-manifest-$WERCKER_GIT_BRANCH/
+        user: $GITHUB_USER
+        token: $GITHUB_TOKEN
+        cmd: push --set-upstream origin Wercker/$WERCKER_GIT_COMMIT
+    - hhiroshell/github@1.0.6:
+        name: hub pull request
+        cwd: cowweb-gitops-manifest-$WERCKER_GIT_BRANCH/
+        user: $GITHUB_USER
+        token: $GITHUB_TOKEN
+        cmd: pull-request -m "CI_Update-the-raw-manifest(s)_image=v1.0-$WERCKER_GIT_BRANCH-$WERCKER_GIT_COMMIT"
