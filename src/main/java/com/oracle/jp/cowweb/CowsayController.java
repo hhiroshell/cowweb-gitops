@@ -29,8 +29,8 @@ public class CowsayController {
 //                c.add(f);
 //            }
 //        });
-//        cowfiles = Collections.unmodifiableList(c);
-//    }
+        cowfiles = Collections.unmodifiableList(c);
+    }
 
     /**
      * Return cowsay's 'say' message.
