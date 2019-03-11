@@ -35,7 +35,7 @@ docker-push:
         cmd: java -jar /pipeline/source/build/libs/cowweb-1.0.jar
 
 update-sst:
-  box: hhayakaw/gitops-runner:v0.1
+  box: hhayakaw/gitops-runner:v1.0.0
   steps:
     - hhiroshell/github@1.0.6:
         name: hub clone manifest template
